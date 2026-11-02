@@ -99,3 +99,59 @@ p_cangas_choice <- can_gas |>
     x = NULL, y = "Billions of cubic meters"
   ) +
   theme_minimal()
+
+  # 3.1b
+can_gas <- can_gas |>
+  mutate(log_volume = log(Volume))
+
+p_cangas_log <- can_gas |>
+  autoplot(log_volume) +
+  labs(title = "Log Monthly Canadian Natural Gas Production", y = "log(Volume)") +
+  theme_minimal()
+
+# 3.1c
+retail_nsa <- retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  mutate(log_sales = log(sales))
+
+p_retail_nsa_level <- retail_nsa |>
+  autoplot(sales) +
+  labs(title = "U.S. Retail Sales (NSA) - Level", y = "Millions of dollars") +
+  theme_minimal()
+
+p_retail_nsa_log <- retail_nsa |>
+  autoplot(log_sales) +
+  labs(title = "U.S. Retail Sales (NSA) - Log", y = "log(Sales)") +
+  theme_minimal()
+
+# 3.2a
+can_gas <- can_gas |>
+  mutate(
+    growth_direct = 100 * difference(Volume) / lag(Volume),
+    growth_logdiff = 100 * difference(log_volume),
+    growth_gap = abs(growth_direct - growth_logdiff)
+  )
+
+p_growth_direct <- can_gas |>
+  autoplot(growth_direct) +
+  labs(title = "Canadian Gas Production: Direct MoM Growth Rate", y = "% Growth") +
+  theme_minimal()
+
+p_growth_gap <- can_gas |>
+  autoplot(growth_gap) +
+  labs(title = "Absolute Gap: Direct vs. Log-Difference Growth", y = "Gap (% points)") +
+  theme_minimal()
+
+# 3.3
+retail_ts <- retail_ts |>
+  group_by_key() |>
+  mutate(growth_mom = 100 * difference(log(sales))) |>
+  ungroup()
+
+p_growth_sa_nsa <- retail_ts |>
+  autoplot(growth_mom) +
+  labs(
+    title = "Month-over-Month Growth: SA vs. NSA Retail Sales",
+    x = NULL, y = "Growth rate (%)", color = NULL
+  ) +
+  theme_minimal()
