@@ -155,3 +155,80 @@ p_growth_sa_nsa <- retail_ts |>
     x = NULL, y = "Growth rate (%)", color = NULL
   ) +
   theme_minimal()
+
+  # 4.1a
+p_season_nsa <- retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  gg_season(sales) +
+  labs(title = "Seasonal Plot: U.S. Retail Sales (NSA)", y = "Millions of dollars") +
+  theme_minimal()
+
+# 4.1b
+p_season_sa <- retail_ts |>
+  filter(series_id == "RSAFS") |>
+  gg_season(sales) +
+  labs(title = "Seasonal Plot: U.S. Retail Sales (SA)", y = "Millions of dollars") +
+  theme_minimal()
+
+# 4.1c
+p_season_cangas <- can_gas |>
+  gg_season(log_volume) +
+  labs(title = "Seasonal Plot: Canadian Gas Production", y = "log(Volume)") +
+  theme_minimal()
+
+# 4.2
+p_subseries_cangas <- can_gas |>
+  gg_subseries(log_volume) +
+  labs(title = "Subseries Plot: Canadian Gas Production", y = "log(Volume)") +
+  theme_minimal()
+
+# 4.3a
+retail_nsa_x13 <- retail_ts |>
+  filter(series_id == "RSAFSNA") |>
+  model(x13 = X_13ARIMA_SEATS(sales ~ seats())) |>
+  components()
+
+# 4.3b
+sa_compare <- retail_nsa_x13 |>
+  as_tibble() |>
+  select(Month, mine = season_adjust) |>
+  left_join(
+    retail_ts |>
+      filter(series_id == "RSAFS") |>
+      as_tibble() |>
+      transmute(Month, census = sales),
+    by = "Month"
+  ) |>
+  mutate(pct_diff = 100 * (log(mine) - log(census)))
+
+p_sa_diff <- sa_compare |>
+  ggplot(aes(x = Month, y = pct_diff)) +
+  geom_line() +
+  labs(
+    title = "My X-13 Seasonal Adjustment Minus Census Bureau",
+    x = NULL, y = "Difference (%)"
+  ) +
+  theme_minimal()
+
+# 4.4a
+can_gas_fit <- can_gas |>
+  model(tslm = TSLM(log_volume ~ trend() + season()))
+
+# 4.4b
+p_cangas_fit <- can_gas_fit |>
+  augment() |>
+  ggplot(aes(x = Month)) +
+  geom_line(aes(y = log_volume, color = "Actual")) +
+  geom_line(aes(y = .fitted, color = "Fitted")) +
+  labs(
+    title = "Linear Trend + Seasonal Dummies: Canadian Gas Production",
+    y = "log(Volume)", color = NULL
+  ) +
+  theme_minimal()
+
+# 4.4c
+lb_test <- can_gas_fit |>
+  augment() |>
+  features(.innov, ljung_box, lag = 24, dof = 13)
+
+print(lb_test)
