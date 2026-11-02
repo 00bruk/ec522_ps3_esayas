@@ -232,3 +232,47 @@ lb_test <- can_gas_fit |>
   features(.innov, ljung_box, lag = 24, dof = 13)
 
 print(lb_test)
+
+# 5.1a: Expanding-Window TS-CV
+gas_cv_fc <- can_gas |>
+  select(Month, Volume) |>
+  stretch_tsibble(.init = 240, .step = 1) |>
+  model(
+    snaive = SNAIVE(Volume),
+    tslm = TSLM(log(Volume) ~ trend() + season())
+  ) |>
+  forecast(h = 1)
+
+# 5.2: DM Test on Expanding Window
+errs_exp <- gas_cv_fc |>
+  as_tibble() |>
+  left_join(as_tibble(can_gas) |> select(Month, actual = Volume), by = "Month") |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  na.omit()
+
+print("DM Test: Expanding Window")
+print(forecast::dm.test(errs_exp$snaive, errs_exp$tslm, h = 1, power = 1))
+
+# 5.3a: Rolling Window TS-CV
+gas_roll_fc <- can_gas |>
+  select(Month, Volume) |>
+  slide_tsibble(.size = 240, .step = 1) |>
+  model(
+    snaive = SNAIVE(Volume),
+    tslm = TSLM(log(Volume) ~ trend() + season())
+  ) |>
+  forecast(h = 1)
+
+# (rolling) DM test
+errs_roll <- gas_roll_fc |>
+  as_tibble() |>
+  left_join(as_tibble(can_gas) |> select(Month, actual = Volume), by = "Month") |>
+  mutate(e = actual - .mean) |>
+  select(Month, .model, e) |>
+  pivot_wider(names_from = .model, values_from = e) |>
+  na.omit()
+
+print("DM Test: Rolling Window")
+print(forecast::dm.test(errs_roll$snaive, errs_roll$tslm, h = 1, power = 1))
