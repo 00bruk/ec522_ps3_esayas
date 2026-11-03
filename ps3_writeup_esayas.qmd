@@ -1,0 +1,134 @@
+---
+title: "Problem Set 3"
+author: "Bruk Esayas"
+date: 11/02/2026
+format:
+  html:
+    toc: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+**GitHub repo:** <https://github.com/00bruk/ec522_ps3_esayas>
+
+```{r}
+#| include: false
+library(tidyverse)
+library(fpp3)
+library(tsibbledata)
+library(knitr)
+source("ps3_script_esayas.R")
+```
+
+## 1. Time and Tsibbles
+U.S. retail sales dataset (retail_ts) is sourced from FRED w/ monthly observations.
+The index is Month and the key is series_id to distinguish between the different series.
+
+Canadian gas production dataset (can_gas) comes from the fpp3 package w/ monthly observations as well. It is a single time series and thus has no key, the index is Month.
+
+```{r} 
+#| echo: false
+head(can_gas_recent)
+
+can_gas_recent |>
+  as_tibble() |>
+  group_by(month) |>
+  summarize(avg_volume = mean(Volume)) |>
+  kable(digits = 2, caption = "Average Canadian Gas Production by Month (1990-2005)")
+
+head(can_gas_q)
+```
+Calendar month production: Highest avg production month is December (17.1). Lowest is June (14.9).
+
+Quarterly aggregation: We summed the monthly values instead of using the mean because the data shows total volume produced over that month, so quarterly production should represent the total volume produced over that quarter.
+
+```{r}
+#| echo: false
+p_retail
+p_cangas
+p_cangas_choice
+```
+
+## 2. Transformations
+
+Log Transformation: Seasonal swings in Canadian gas production grows with the level of the series. Using the natural loga of the data stabilizes this variance, making logs the most suitable transformation before modeling the data.
+
+```{r}
+#| echo: false
+p_cangas_log
+p_retail_nsa_level
+p_retail_nsa_log
+```
+
+For the same reason, logging the U.S. retail sales data is also appropriate because the seasonal swings in the data grow with the level of the series.
+
+```{r}
+#| echo: false
+p_growth_direct
+p_growth_gap
+p_growth_sa_nsa
+```
+
+
+Growth Rates: The log-difference approximation performs good here. Absolute gap between the month-over-month % growth rate and the logged-difference approximation is tiny, rarely going over 0.2 percentage points.
+
+## 3. Seasonality
+
+Seasonal Plots and Subseries:
+
+Seasonally adjusted retail sales series (RSAFS) is  smoother than the non-seasonally adjusted one (RSAFSNA). It visually demonstrates that seasonal adjustment successfully removes the calendar fluctuations.
+
+Canadian natural gas production peaks quickly during the winter months (December through January) and dips during the summer (June through July). This shows the higher heating demand in colder months.
+
+```{r}
+#| echo: false
+p_season_nsa
+p_season_sa
+p_season_cangas
+p_subseries_cangas
+```
+
+X-13ARIMA-SEATS & TSLM:
+Comparing the X-13 seasonal adjustment to the Census Bureau's reported adjustment shows a pretty close match, with % differences fluctuating positively and negatively around zero.
+
+```{r}
+#| echo: false
+p_sa_diff
+
+can_gas_fit |>
+  tidy() |>
+  select(term, estimate, std.error, statistic, p.value) |>
+  kable(digits = 3, caption = "Linear Trend + Seasonal Dummies")
+
+p_cangas_fit
+print(lb_test)
+```
+
+Ljung-Box Test: Residuals from the linear trend, seasonal dummies model returns a  large test statistic and a p-value ~ 0, leading us to  reject the null hypothesis of white noise. This implies that the model leaving behind large levels of autocorrelation.
+
+## 4. Forecast Evaluation
+
+*Expanding Window TS-CV:
+
+```{r}
+#| echo: false
+gas_cv_fc |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE)) |>
+  kable(digits = 3, caption = "Expanding Window TS-CV Accuracy")
+```
+
+DM Test (Expanding): The DM test yields a test statistic of -31.278 and a p-value of ~0 (2.2 * 10 to the negative 16th power). We reject the null of equal forecast accuracy and conclude that the TSLM model is more accurate than the seasonal naive benchmark.
+
+```{r}
+#| echo: false
+gas_roll_fc |>
+  accuracy(can_gas, measures = list(MAE = MAE, RMSE = RMSE)) |>
+  kable(digits = 3, caption = "Rolling Window TS-CV Accuracy")
+```
+
+DM Test (Rolling ): Rolling window test returns a test statistic of -20.052 and a p-value ~0 (2.2 * 10 to the negative 16th power) which confirms that the TSLM model retains its statistically significant (and superior) accuracy.
+
+## 5. Reflection
+Residuals from our TSLM are not simply white noise. There is some strong autocorrelation left in the residuals (as proven by the Ljung-Box test). This reveals that the model is not purely capturing all the patterns of the data. For a future improvement, maybe we could try to do some ARIMA modeling on the residuals in hopes of capturing the remaining autocorrelation.
